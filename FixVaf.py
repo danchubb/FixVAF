@@ -3,8 +3,28 @@ import sys
 import numpy
 import os
 #import matplotlib.pyplot as plt
-
 #Also requires tabix/bgzip to be installed. 
+
+    
+def input_output_same(input,output):
+    intype='cat'
+    outtype='cat'
+    
+    if input[-2:]=='gz':
+        intype='z'+intype
+    if output[-2:]=='gz':
+        outtype='z'+outtype
+    if os.path.exists(input) and os.path.exists(output):
+        invars=int(os.open(intype+' '+input+' |grep -v "#" |wc').read().split()[0])
+        outvars=int(os.open(outtype+' '+output+' |grep -v "#" |wc').read().split()[0])
+        if invars == outvars:
+            return 0
+        else:
+            print("variants in "+input+" ("+str(invars)+") not equal to "+output+"("+str(outvars)+")",file=sys.stderr)
+            return 1
+    else:
+        print("Check input and output files",input,output,file=sys.stderr)
+        return 1
 
 #'/scratch/DGE/MOPOPGEN/studies/references/b38/ilumina/Homo_sapiens/NCBI/GRCh38Decoy/Sequence/WholeGenomeFasta/genome.fa')
 vcf_file=sys.argv[1]
@@ -23,13 +43,12 @@ def bamquery(myfasta,bamfile,chr,pos,ref,alt):
     var=['A','T','C','G']
     fields=['pos','cig','mq','bq','paired']
     tier=['t1','t2','t3']
-     
+    readnames={} 
     for v in var:
         tiers[v]={}
         for t in tier:
             tiers[v][t]=0
-        for f in fields:
-            output[v+'_'+f]=[]
+            readnames[t]={}
     
     s=b0pos-2
     e=pos+2
@@ -38,18 +57,12 @@ def bamquery(myfasta,bamfile,chr,pos,ref,alt):
         s=0
     if pos+2 > chrom_lengths[chr]:
         e=chrom_lengths[chr]
-        
-    readnames={}
-    
-    readnames['t1']={}
-    readnames['t2']={}
-    readnames['t3']={}
     
     for read in bam.fetch(contig=chr,start=s,end=e):
         cigar=read.cigartuples
+        #ignore unmapped, duplicate, non primary badly mapped or cigar is malformed 
         if read.is_duplicate or read.is_unmapped or read.is_secondary or read.is_qcfail or not cigar or read.mapping_quality==0:
             continue
-
         #where there is a hardclip, begining, end or both? Need to know in the are cases where there is both soft and hard clipping happening
         H_begin=0
         H_end=0
@@ -96,7 +109,6 @@ def bamquery(myfasta,bamfile,chr,pos,ref,alt):
                         cigar_val=c[0]
                         if read_pos<=4 or read_pos>=(read_size-5):
                             cigar_val=4
-                            
                         base=read.seq[read_pos]
                         bq=read.query_qualities[read_pos]
                         if(bq>0):
@@ -147,7 +159,7 @@ def read_somatic_vcf(vcf_file,bam):
         filters=v.filter.keys()
         sample=v.samples[1]
         #if filters[0]=="PASS" and v.chrom in chromlist and len(v.alts)==1 and len(v.ref)==1 and len(v.alts[0])==1 and len(GT)==2 and sum(GT)==1:
-        if filters[0]=='PASS' and v.chrom in chromlist and v.alts and len(v.alts)==1 and 'TIR' not in v.format :
+        if v.chrom in chromlist and v.alts and len(v.alts)==1 and len(v.ref)==1 and len(v.alts[0])==1 and 'TIR' not in v.format :
             tiers=bamquery(myfasta,bam,v.chrom,v.pos,v.ref,v.alts[0])
             v.info['t1BamAC']=str(tiers['A']['t1'])+","+str(tiers['C']['t1'])+","+str(tiers['G']['t1'])+","+str(tiers['T']['t1'])
             v.info['t2BamAC']=str(tiers['A']['t2'])+","+str(tiers['C']['t2'])+","+str(tiers['G']['t2'])+","+str(tiers['T']['t2'])
@@ -159,6 +171,14 @@ def read_somatic_vcf(vcf_file,bam):
     OUT.close()
     os.system("bgzip -f "+vcf_out)
     os.system("tabix -f -p vcf "+vcf_out+".gz")
+    same=input_output_same(vcf_file,vcf_out+".gz")
+    return same
 
 
-read_somatic_vcf(vcf_file,bam)
+error=read_somatic_vcf(vcf_file,bam)
+
+if error:
+    print("ERROR, number of variants is different or files don't exist", file=sys.stderr)
+    sys.exit(1)
+else:
+    print("Input and output exists and number of vars is the same")
