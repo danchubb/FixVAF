@@ -5,8 +5,6 @@ Requires python 3 with psam installed.
 
 To run:
 
+python FixVaf.py [vcf file] [bam file] [fasta file]
 
-
-vcf_file=sys.argv[1]
-bam=sys.argv[2]
-myfasta=pysam.FastaFile(sys.argv[3])
+bam file is the file used to call the vcf. 
