@@ -147,7 +147,7 @@ def read_somatic_vcf(vcf_file,bam):
     vcf_out=vcf_file[:-7]+".VAF.vcf"
     OUT=open(vcf_out,'w')
     vcf=pysam.VariantFile(vcf_file,'r')
-    sample_list=list(vcf.header.samples)
+    #sample_list=list(vcf.header.samples)
    
     counts=0
     
@@ -157,7 +157,7 @@ def read_somatic_vcf(vcf_file,bam):
     OUT.write(str(vcf.header))
     for v in vcf:
         filters=v.filter.keys()
-        sample=v.samples[1]
+        #sample=v.samples[1]
         #if filters[0]=="PASS" and v.chrom in chromlist and len(v.alts)==1 and len(v.ref)==1 and len(v.alts[0])==1 and len(GT)==2 and sum(GT)==1:
         if v.chrom in chromlist and v.alts and len(v.alts)==1 and len(v.ref)==1 and len(v.alts[0])==1 and 'TIR' not in v.format :
             tiers=bamquery(myfasta,bam,v.chrom,v.pos,v.ref,v.alts[0])
